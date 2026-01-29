@@ -17,7 +17,7 @@ from typing import Optional, Dict, Any, List
 from seleniumbase import SB
 
 
-def load_proxies_from_file(filepath: str = "proxy.txt") -> List[str]:
+def load_proxies_from_file(filepath: str = "/app/output/proxy.txt") -> List[str]:
     """
     从文件加载代理列表
     
@@ -46,7 +46,7 @@ def load_proxies_from_file(filepath: str = "proxy.txt") -> List[str]:
     return proxies
 
 
-def get_random_proxy(filepath: str = "proxy.txt") -> Optional[str]:
+def get_random_proxy(filepath: str = "/app/output/proxy.txt") -> Optional[str]:
     """
     从文件中随机获取一个代理
     
@@ -116,7 +116,7 @@ def check_proxy_alive(proxy: str, timeout: float = 8.0) -> bool:
         return False
 
 
-def get_working_proxy(filepath: str = "proxy.txt", max_check: int = 10, timeout: float = 3.0) -> Optional[str]:
+def get_working_proxy(filepath: str = "/app/output/proxy.txt", max_check: int = 10, timeout: float = 3.0) -> Optional[str]:
     """
     从文件中获取一个可用的代理
     
@@ -201,7 +201,7 @@ def check_chrome_installed():
 
 def bypass_cloudflare_with_proxy_rotation(
     url: str,
-    proxy_file: str = "proxy.txt",
+    proxy_file: str = "/app/output/proxy.txt",
     wait_time: float = 5.0,
     save_cookies: bool = True,
     timeout: float = 60.0,
@@ -265,7 +265,7 @@ def bypass_cloudflare_with_proxy_rotation(
 
 def bypass_parallel(
     url: str,
-    proxy_file: str = "proxy.txt",
+    proxy_file: str = "/app/output/proxy.txt",
     batch_size: int = 3,
     timeout: float = 15.0,
     wait_time: float = 5.0,
@@ -411,7 +411,7 @@ def bypass_parallel(
                     if result["success"]:
                         # 保存Cookie
                         if save_cookies:
-                            save_dir = Path("output/cookies")
+                            save_dir = Path("/app/output/cookies")
                             save_dir.mkdir(parents=True, exist_ok=True)
                             ts = datetime.now().strftime("%Y%m%d_%H%M%S")
                             with open(save_dir / f"cookies_{ts}.json", "w", encoding="utf-8") as f:
@@ -539,7 +539,7 @@ def bypass_cloudflare(
                     
                     # 保存Cookie
                     if save_cookies:
-                        save_dir = Path("output/cookies")
+                        save_dir = Path("/app/output/cookies")
                         save_dir.mkdir(parents=True, exist_ok=True)
                         ts = datetime.now().strftime("%Y%m%d_%H%M%S")
                         
@@ -604,13 +604,13 @@ if __name__ == "__main__":
 示例:
   python simple_bypass.py https://example.com
   python simple_bypass.py https://example.com -p http://127.0.0.1:7890
-  python simple_bypass.py https://example.com --proxy-file proxy.txt
-  python simple_bypass.py https://example.com -f proxy.txt --random
+  python simple_bypass.py https://example.com --proxy-file /app/output/proxy.txt
+  python simple_bypass.py https://example.com -f /app/output/proxy.txt --random
         """
     )
     parser.add_argument("url", help="目标URL")
     parser.add_argument("-p", "--proxy", help="代理地址 (直接指定)")
-    parser.add_argument("-f", "--proxy-file", default="proxy.txt", help="代理文件路径 (默认: proxy.txt)")
+    parser.add_argument("-f", "--proxy-file", default="/app/output/proxy.txt", help="代理文件路径 (默认: /app/output/proxy.txt)")
     parser.add_argument("-r", "--rotate", action="store_true", help="顺序代理轮换模式")
     parser.add_argument("-P", "--parallel", action="store_true", help="并行模式: 同时启动多个浏览器")
     parser.add_argument("-b", "--batch", type=int, default=3, help="并行模式每批浏览器数 (默认: 3)")
