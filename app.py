@@ -1,61 +1,51 @@
 import streamlit as st
+import json
 import os
 import subprocess
-import time
-from katabump_renew import run_auto_renew  # 导入你的续期函数
 
-st.set_page_config(page_title="综合控制台", page_icon="⚡")
+CONFIG_FILE = "/app/output/tasks_config.json" # 存放在挂载的持久化目录
 
-st.title("⚡ 多模式绕过与自动续期控制面板")
+# --- 核心功能：保存与读取配置 ---
+def load_config():
+    if os.path.exists(CONFIG_FILE):
+        with open(CONFIG_FILE, 'r', encoding='utf-8') as f:
+            return json.load(f)
+    return []
 
-# --- 配置区 ---
-st.sidebar.header("配置选项")
-target_url = st.sidebar.text_input("目标网址", os.environ.get("TARGET_URL", "https://nowsecure.nl"))
-run_mode = st.sidebar.selectbox("选择运行脚本 (模式)", [
-    "1. Katabump 自动续期 (katabump_renew.py)",
-    "2. 单浏览器绕过 (bypass.py)",
-    "3. SeleniumBase 增强绕过 (bypass_seleniumbase.py)",
-    "4. 核心绕过工具 (simple_bypass.py)"
-])
+def save_config(tasks):
+    os.makedirs(os.path.dirname(CONFIG_FILE), exist_ok=True)
+    with open(CONFIG_FILE, 'w', encoding='utf-8') as f:
+        json.dump(tasks, f, ensure_ascii=False, indent=2)
 
-# --- 运行区 ---
-if st.button("🚀 立即开始任务"):
-    with st.status(f"正在启动 {run_mode}...", expanded=True) as status:
-        log_area = st.empty()
-        
-        # 模式 1: 运行你提供的专属续期逻辑
-        if "1. Katabump" in run_mode:
-            try:
-                # 调用你发给我的 run_auto_renew 函数
-                run_auto_renew() 
-                result = "✅ 续期流程已在后台执行完毕！"
-            except Exception as e:
-                result = f"❌ 续期运行失败: {str(e)}"
-            log_area.code(result)
+# --- 初始化任务 ---
+if 'tasks' not in st.session_state:
+    st.session_state.tasks = load_config()
 
-        # 模式 2, 3, 4: 严格通过命令行调用你原本的独立文件，不改动其内部代码
-        else:
-            file_map = {
-                "2. 单浏览器": "bypass.py",
-                "3. SeleniumBase": "bypass_seleniumbase.py",
-                "4. 核心绕过": "simple_bypass.py"
-            }
-            script_name = next(v for k, v in file_map.items() if k in run_mode)
-            
-            # 构造命令：使用 xvfb-run 确保在容器内有显示环境
-            cmd = ["xvfb-run", "--server-args=-screen 0 1920x1080x24", "python", script_name, target_url]
-            
-            # 实时捕获并显示你原本代码里的 print 输出
-            process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
-            full_log = ""
-            for line in process.stdout:
-                full_log += line
-                log_area.code(full_log)
-            process.wait()
-            result = "✅ 脚本执行结束" if process.returncode == 0 else "❌ 脚本运行出错"
+# --- 主 UI 界面 ---
+st.title("🤖 自动化任务管理器 (支持自动保存)")
 
-        status.update(label="处理结束", state="complete")
-        st.success(result)
+# 遍历任务并创建输入框
+new_task_list = []
+for i, task in enumerate(st.session_state.tasks):
+    with st.expander(f"任务: {task.get('name', '未命名')}", expanded=True):
+        c1, c2, c3, c4 = st.columns(4)
+        task['email'] = c1.text_input("账号", value=task.get('email', ''), key=f"e_{i}")
+        task['password'] = c2.text_input("密码", type="password", value=task.get('password', ''), key=f"p_{i}")
+        task['freq'] = c3.number_input("周期(天)", value=task.get('freq', 3), key=f"f_{i}")
+        task['active'] = c4.checkbox("启用", value=task.get('active', True), key=f"a_{i}")
+        new_task_list.append(task)
 
-st.divider()
-st.caption(f"当前时间: {time.strftime('%Y-%m-%d %H:%M:%S')}")
+if st.button("💾 保存当前所有配置"):
+    save_config(new_task_list)
+    st.success("配置已保存到本地 JSON 文件，下次打开将自动加载！")
+
+if st.button("🚀 统一点执行 (跑完所有流程)"):
+    # 这里的逻辑会依次启动所有启用状态的任务
+    for task in new_task_list:
+        if task['active']:
+            st.write(f"正在跑: {task['name']}...")
+            # 这里的 env 设置会覆盖系统变量
+            env = os.environ.copy()
+            env["EMAIL"] = task['email']
+            env["PASSWORD"] = task['password']
+            subprocess.run(["xvfb-run", "python", task['script']], env=env)
