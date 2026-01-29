@@ -79,7 +79,7 @@ def bypass_cloudflare(
             print(f"[*] 代理: {proxy}")
         
         # 启动浏览器
-        with SB(uc=True, test=True, locale="en", proxy=proxy) as sb:
+        with SB(uc=True, test=True, locale="en", proxy=proxy, headless=True, chromium_arg="--no-sandbox,--disable-dev-shm-usage") as sb:
             print("[*] 浏览器已启动，正在加载页面...")
             
             # 打开页面
