@@ -3,7 +3,7 @@ import json
 import os
 import subprocess
 import time
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 # 配置文件路径
 CONFIG_FILE = "/app/output/tasks_config.json"
@@ -12,7 +12,7 @@ def load_config():
     if os.path.exists(CONFIG_FILE):
         with open(CONFIG_FILE, 'r', encoding='utf-8') as f:
             return json.load(f)
-    return [{"name": "Katabump 自动续期任务", "script": "katabump_renew.py", "mode": "SB增强模式 (对应脚本: bypass_seleniumbase.py)", "email": "", "password": "", "freq": 3, "active": True, "last_run": None}]
+    return [{"name": "Katabump 自动续期任务", "script": "katabump_renew.py", "mode": "SB增强模式 (对应脚本: bypass_seleniumbase.py)", "email": "", "password": "", "freq": 3, "active": True, "last_run": "从未运行"}]
 
 def save_config(tasks):
     os.makedirs(os.path.dirname(CONFIG_FILE), exist_ok=True)
@@ -31,7 +31,7 @@ st.markdown("""
     .stExpander { border: 1px solid #00e5ff !important; background-color: #12161f !important; border-radius: 10px; }
     .status-tag { padding: 3px 10px; border-radius: 15px; font-size: 0.8em; font-weight: bold; }
     .active-tag { background-color: rgba(0, 255, 128, 0.2); color: #00ff80; border: 1px solid #00ff80; }
-    .standby-tag { background-color: rgba(255, 255, 255, 0.1); color: #888; border: 1px solid #555; }
+    .status-tag.standby-tag { background-color: rgba(255, 255, 255, 0.1); color: #888; border: 1px solid #555; }
     code { background-color: #000 !important; color: #00ff80 !important; border: 1px solid #333; }
     </style>
     """, unsafe_allow_html=True)
@@ -56,7 +56,6 @@ with st.sidebar:
     st.header("🧬 终端管理")
     new_item = st.text_input("新增项目名", placeholder="输入项目识别码...")
     if st.button("➕ 注入新进程"):
-        # 确保新任务即便没有 last_run 也不为空
         st.session_state.tasks.append({"name": new_item, "script": "katabump_renew.py", "mode": "SB增强模式 (对应脚本: bypass_seleniumbase.py)", "email": "", "password": "", "freq": 3, "active": True, "last_run": "从未运行"})
         save_config(st.session_state.tasks)
         st.rerun()
@@ -90,13 +89,14 @@ for i, task in enumerate(st.session_state.tasks):
         t1, t2, t3, t4 = st.columns([1, 1, 2, 1])
         task['freq'] = t1.number_input("同步周期 (天)", 1, 30, task.get('freq', 3), key=f"freq_{i}")
         
-        # --- 修复代码：安全解析日期 ---
+        # --- 这里的显示逻辑修正 ---
         last = task.get('last_run', "从未运行")
         next_date = "等待首次运行"
         
-        if last and last != "从未运行":
+        # 严格判断格式，防止 katassv 导致显示崩溃
+        if last and last != "从未运行" and len(str(last)) > 10:
             try:
-                next_date = (datetime.strptime(last, "%Y-%m-%d %H:%M:%S") + timedelta(days=task['freq'])).strftime("%Y-%m-%d")
+                next_date = (datetime.strptime(str(last), "%Y-%m-%d %H:%M:%S") + timedelta(days=task['freq'])).strftime("%Y-%m-%d")
             except:
                 next_date = "格式异常"
         
@@ -114,7 +114,6 @@ for i, task in enumerate(st.session_state.tasks):
 
         updated_tasks.append(task)
 
-# --- 全局控制栏 (保持原样) ---
 st.divider()
 bc1, bc2, bc3 = st.columns([1, 1, 1])
 if bc1.button("💾 保存配置参数"):
@@ -144,7 +143,10 @@ if bc2.button("🚀 启动全域自动化同步"):
                 
                 process.wait()
                 if process.returncode == 0:
-                    task['last_run'] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                    # --- 核心锁定：确保写入的是标准北京时间字符串，不给乱码机会 ---
+                    bj_tz = timezone(timedelta(hours=8))
+                    current_bj_time = datetime.now(bj_tz).strftime("%Y-%m-%d %H:%M:%S")
+                    task['last_run'] = current_bj_time
                     save_config(updated_tasks)
                     st.success(f"项目 {task['name']} 处理成功")
                 else:
