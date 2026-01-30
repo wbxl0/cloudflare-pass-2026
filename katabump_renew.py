@@ -1,6 +1,6 @@
 import os
 import time
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 import requests
 from seleniumbase import SB
@@ -26,7 +26,9 @@ def send_tg_notification(status, message, photo_path=None):
     chat_id = os.environ.get("TELEGRAM_CHAT_ID")
     if not (token and chat_id): return
     
-    bj_time = (datetime.utcnow() + timedelta(hours=8)).strftime('%Y-%m-%d %H:%M:%S')
+    # 使用 timezone 确保北京时间锁死，不受服务器系统时钟干扰
+    tz_bj = timezone(timedelta(hours=8))
+    bj_time = datetime.now(tz_bj).strftime('%Y-%m-%d %H:%M:%S')
     emoji = "✅" if "成功" in status else "⚠️" if "未到期" in status else "❌"
     
     formatted_msg = (
@@ -101,23 +103,33 @@ def run_auto_renew():
             sb.sleep(12) 
 
             # ---- [步骤 E] 结果抓取 (核心修复区) ----
+            # 修复逻辑：强制刷新页面并等待，确保数据库更新后的日期被加载
+            logger.info("正在刷新页面以获取最新到期日期...")
+            sb.refresh()
+            sb.sleep(8) 
+            
             final_img = str(OUTPUT_DIR / "final_result.png")
             sb.save_screenshot(final_img)
             
             page_source = sb.get_page_source()
             
-            # 改进：通过文本锚点精准提取日期，防止抓到 katassv 等杂质
+            # 改进：通过文本锚点精准提取日期，增加对乱码 katassv 的过滤
             if "2026-" in page_source:
                 try:
-                    # 使用 XPath 寻找包含 "Expiry" 文本的 div，然后找它旁边的那个包含日期内容的兄弟节点
+                    # 使用锚点 XPath 定位 Expiry 后的 div
                     expiry_date = sb.get_text('//div[contains(text(), "Expiry")]/following-sibling::div')
-                    # 如果抓出来的还是太长，简单切分一下
-                    expiry_date = expiry_date.strip().split()[0]
-                    send_tg_notification("续期成功 ✅", f"服务器续期已生效！\n📅 **下次到期**: `{expiry_date}`", final_img)
+                    # 清洗：只提取前 10 位 (例如 2026-02-02)
+                    clean_date = expiry_date.strip()[:10]
+                    
+                    # 再次保险：如果抓出来的不是以 20 开头的 10 位字符，则判定为抓取失败
+                    if not clean_date.startswith("20"):
+                        raise Exception("抓取到的日期格式不规范")
+
+                    send_tg_notification("续期成功 ✅", f"服务器续期已生效！\n📅 **下次到期**: `{clean_date}`", final_img)
                 except:
-                    # 如果 XPath 失败，尝试定位到期时间所在的特定表格行
-                    expiry_date = sb.get_text('div.card-body div.row:nth-child(4) div.col-lg-9')
-                    send_tg_notification("续期成功 ✅", f"服务器续期成功！\n📅 **下次到期**: `{expiry_date.strip()}`", final_img)
+                    # 备选方案
+                    expiry_date = sb.get_text('div.card-body div.row:nth-child(4) div.col-lg-9').strip()[:10]
+                    send_tg_notification("续期成功 ✅", f"服务器续期成功！\n📅 **下次到期**: `{expiry_date}`", final_img)
             else:
                 send_tg_notification("未到期 ⚠️", "目前页面未刷新日期，可能尚未达到可续期时间门槛。", final_img)
 
