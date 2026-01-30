@@ -10,19 +10,25 @@ CONFIG_FILE = "/app/output/tasks_config.json"
 
 def load_config():
     if os.path.exists(CONFIG_FILE):
-        with open(CONFIG_FILE, 'r', encoding='utf-8') as f:
-            return json.load(f)
+        try:
+            with open(CONFIG_FILE, 'r', encoding='utf-8') as f:
+                return json.load(f)
+        except:
+            pass
     return [{"name": "Katabump 自动续期任务", "script": "katabump_renew.py", "mode": "SB增强模式 (对应脚本: bypass_seleniumbase.py)", "email": "", "password": "", "freq": 3, "active": True, "last_run": "从未运行"}]
 
 def save_config(tasks):
     os.makedirs(os.path.dirname(CONFIG_FILE), exist_ok=True)
-    with open(CONFIG_FILE, 'w', encoding='utf-8') as f:
+    # 增加临时文件写入机制，防止写入一半断电导致 JSON 损坏
+    temp_file = CONFIG_FILE + ".tmp"
+    with open(temp_file, 'w', encoding='utf-8') as f:
         json.dump(tasks, f, ensure_ascii=False, indent=2)
+    os.replace(temp_file, CONFIG_FILE)
 
 # --- 页面全局配置 ---
 st.set_page_config(page_title="矩阵自动化控制内核", layout="wide")
 
-# 自定义全中文高科技感 CSS (一个字没改)
+# 自定义全中文高科技感 CSS (保持原样)
 st.markdown("""
     <style>
     .main { background-color: #0b0e14; color: #00e5ff; font-family: 'Microsoft YaHei', sans-serif; }
@@ -56,7 +62,6 @@ with st.sidebar:
     st.header("🧬 终端管理")
     new_item = st.text_input("新增项目名", placeholder="输入项目识别码...")
     if st.button("➕ 注入新进程"):
-        # 确保新任务即便没有 last_run 也不为空
         st.session_state.tasks.append({"name": new_item, "script": "katabump_renew.py", "mode": "SB增强模式 (对应脚本: bypass_seleniumbase.py)", "email": "", "password": "", "freq": 3, "active": True, "last_run": "从未运行"})
         save_config(st.session_state.tasks)
         st.rerun()
@@ -90,13 +95,13 @@ for i, task in enumerate(st.session_state.tasks):
         t1, t2, t3, t4 = st.columns([1, 1, 2, 1])
         task['freq'] = t1.number_input("同步周期 (天)", 1, 30, task.get('freq', 3), key=f"freq_{i}")
         
-        # --- 核心显示保护逻辑：防止 katassv 干扰 ---
+        # --- 显示保护逻辑 ---
         last = task.get('last_run', "从未运行")
         next_date = "等待首次运行"
         
-        # 增加了长度检查，因为标准时间格式长度必定大于 10 位
         if last and last != "从未运行" and len(str(last)) > 10:
             try:
+                # 统一时区解析
                 next_date = (datetime.strptime(str(last), "%Y-%m-%d %H:%M:%S") + timedelta(days=task['freq'])).strftime("%Y-%m-%d")
             except:
                 next_date = "格式异常"
@@ -106,7 +111,7 @@ for i, task in enumerate(st.session_state.tasks):
         
         pic_path = "/app/output/success_final.png"
         if os.path.exists(pic_path):
-            st.image(pic_path, caption="最近一次 API 物理过盾存证 (2026-01-29)", use_container_width=True)
+            st.image(pic_path, caption="最近一次 API 物理过盾存证", use_container_width=True)
 
         if t4.button("🗑️ 移除任务", key=f"del_{i}"):
             st.session_state.tasks.pop(i)
@@ -115,7 +120,6 @@ for i, task in enumerate(st.session_state.tasks):
 
         updated_tasks.append(task)
 
-# --- 全局控制栏 (保持原样) ---
 st.divider()
 bc1, bc2, bc3 = st.columns([1, 1, 1])
 if bc1.button("💾 保存配置参数"):
@@ -145,7 +149,7 @@ if bc2.button("🚀 启动全域自动化同步"):
                 
                 process.wait()
                 if process.returncode == 0:
-                    # --- 核心锁定：确保写入的是标准北京时间字符串 ---
+                    # --- 核心锁定北京时间 ---
                     bj_tz = timezone(timedelta(hours=8))
                     current_bj_time = datetime.now(bj_tz).strftime("%Y-%m-%d %H:%M:%S")
                     task['last_run'] = current_bj_time
