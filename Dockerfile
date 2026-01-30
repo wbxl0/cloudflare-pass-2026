@@ -44,6 +44,9 @@ COPY . .
 RUN pip install --no-cache-dir -r requirements.txt
 RUN pip install pyvirtualdisplay seleniumbase loguru streamlit requests
 
-# 5. 启动命令
-# 逻辑：重启时先运行调度器检查任务(同步模式变量)，再启动 UI 界面
-CMD python scheduler.py ; streamlit run app.py --server.port 8080 --server.address 0.0.0.0
+# 5. 启动命令 (关键修复点)
+# 逻辑拆解：
+# a. 使用 sh -c 启动 shell 环境
+# b. streamlit 后面加 & 进入后台运行，端口使用 Zeabur 动态分配的 $PORT (默认 8080)
+# c. 使用 while 循环让 scheduler.py 每小时运行一次，实现“即便关掉页面也会自动保活”
+CMD ["sh", "-c", "streamlit run app.py --server.port ${PORT:-8080} --server.address 0.0.0.0 & while true; do python scheduler.py; sleep 3600; done"]
