@@ -7,45 +7,54 @@ from seleniumbase import SB
 from loguru import logger
 
 # ==========================================
-# 1. 严格按照仓库 API 逻辑进行函数导入
+# 1. 严格按照仓库 API 逻辑进行函数导入 (完全不改)
 # ==========================================
 try:
     # API 1: 简单模式 (bypass.py)
-    # 工作逻辑: 接收 URL, 返回字典
     from bypass import bypass_cloudflare as api_core_1
-
     # API 2 & 3: 完整模式 (simple_bypass.py)
-    # 工作逻辑: 分别对应单次(url, proxy)和并行(url, proxy_file)
     from simple_bypass import bypass_cloudflare as api_core_2
     from simple_bypass import bypass_parallel as api_core_3
-
     # API 4: 指纹增强模式 (bypass_seleniumbase.py)
-    # 工作逻辑: 直接注入现有的浏览器实例 sb
     from bypass_seleniumbase import bypass_logic as api_core_4
-    
     logger.info("📡 核心 API 插件已成功挂载至主程序")
 except Exception as e:
     logger.error(f"🚨 API 加载失败，请检查文件层级: {e}")
 
 # ==========================================
-# 2. TG 通知功能 (保持原样)
+# 2. 高科技 TG UI 格式化功能
 # ==========================================
-def send_tg_notification(message, photo_path=None):
+def send_tg_notification(status, message, photo_path=None):
     token = os.environ.get("TELEGRAM_BOT_TOKEN")
     chat_id = os.environ.get("TELEGRAM_CHAT_ID")
     if not (token and chat_id): return
+    
+    # 构造更美观的 TGUI
+    now = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    emoji = "✅" if "成功" in status else "⚠️" if "未到期" in status else "❌"
+    
+    formatted_msg = (
+        f"{emoji} **矩阵自动化续期报告**\n"
+        f"━━━━━━━━━━━━━━━━━━\n"
+        f"👤 **账户**: `{os.environ.get('EMAIL', 'Unknown')}`\n"
+        f"📡 **状态**: {status}\n"
+        f"📝 **详情**: {message}\n"
+        f"🕒 **时间**: {now}\n"
+        f"━━━━━━━━━━━━━━━━━━"
+    )
+
     try:
         if photo_path and os.path.exists(photo_path):
             with open(photo_path, 'rb') as f:
                 requests.post(f"https://api.telegram.org/bot{token}/sendPhoto", 
-                              data={'chat_id': chat_id, 'caption': message}, files={'photo': f})
+                              data={'chat_id': chat_id, 'caption': formatted_msg, 'parse_mode': 'Markdown'}, files={'photo': f})
         else:
             requests.post(f"https://api.telegram.org/bot{token}/sendMessage", 
-                          data={'chat_id': chat_id, 'text': message})
+                          data={'chat_id': chat_id, 'text': formatted_msg, 'parse_mode': 'Markdown'})
     except Exception as e: logger.error(f"TG通知失败: {e}")
 
 # ==========================================
-# 3. 自动化续期主流程 (API 调用对齐)
+# 3. 自动化续期主流程 (逻辑增强版)
 # ==========================================
 def run_auto_renew():
     email = os.environ.get("EMAIL")
@@ -72,51 +81,52 @@ def run_auto_renew():
             sb.js_click('button[data-bs-target="#renew-modal"]') # 触发验证弹窗
             sb.sleep(6)
 
-            # ---- [步骤 C] 核心：正确调用那三个脚本的 API ----
+            # ---- [步骤 C] 核心：API 调用 (保持原逻辑) ----
             current_url = sb.get_current_url()
             logger.info(f">>> 正在按原作者逻辑调用 API: {ui_mode}")
 
             if "1." in ui_mode:
-                # 模式 1 调用逻辑: bypass.py (简单模式)
-                # 传入 URL，获取 cf_clearance 和 UA
                 result = api_core_1(current_url)
-                logger.info(f"API 1 结果: {result['success']}")
-
             elif "2." in ui_mode:
-                # 模式 2 调用逻辑: simple_bypass.py (单次绕过)
-                # 传入 URL 和代理
                 result = api_core_2(current_url, proxy=os.environ.get("PROXY"))
-
             elif "3." in ui_mode:
-                # 模式 3 调用逻辑: simple_bypass.py (并行绕过)
-                # 传入 URL, proxy_file 和批处理大小
                 result = api_core_3(url=current_url, proxy_file="proxy.txt", batch_size=3)
-
             elif "4." in ui_mode:
-                # 模式 4 调用逻辑: bypass_seleniumbase.py (增强模式)
-                # 关键：直接将当前的浏览器实例 sb 交给它注入指纹
                 api_core_4(sb)
                 result = {"success": True}
 
-            # ---- [步骤 D] 整合 API 成果并最终点击 ----
-            # 使用 UC 模式的物理点击确保验证码框消失
+            # ---- [步骤 D] 整合成果与提交 (根据要求增强) ----
             sb.uc_gui_click_captcha()
-            sb.sleep(6)
+            logger.info("验证已完成，进入 20 秒脚本启动与稳定缓冲期...")
+            sb.sleep(20) # 按照要求：给 20 秒时间给脚本起动过人机验证并稳定
             
-            # 解决日志中提到的找不到按钮的问题
-            logger.info("正在执行最终提交...")
-            sb.wait_for_element('button:contains("更新")', timeout=10)
-            sb.click('button:contains("更新")')
+            # 点击最终提交按钮：<button type="submit" class="btn btn-primary">Renew</button>
+            logger.info("执行最终 Renew 提交点击...")
+            sb.click('button[type="submit"].btn-primary')
+            sb.sleep(10) # 等待结果反馈加载
+
+            # ---- [步骤 E] 结果捕获与智能通知 ----
+            final_img = str(OUTPUT_DIR / "final_result.png")
+            sb.save_screenshot(final_img)
             
-            sb.sleep(10)
-            success_img = str(OUTPUT_DIR / "success_final.png")
-            sb.save_screenshot(success_img)
-            send_tg_notification(f"✅ 续期完成！模式: {ui_mode}", success_img)
+            # 获取页面文字内容判断状态
+            page_text = sb.get_page_source()
+            
+            if "2026-" in page_text:
+                # 抓取到期时间：<div class="col-lg-9 col-md-8">2026-02-02</div>
+                try:
+                    expiry_date = sb.get_text('div.col-lg-9.col-md-8')
+                    send_tg_notification("续期成功 ✅", f"服务器已成功续命！\n📅 **下次到期**: `{expiry_date}`", final_img)
+                except:
+                    send_tg_notification("续期成功 ✅", "续期已完成，但未抓取到具体日期。", final_img)
+            else:
+                # 判定为还没到续期时间
+                send_tg_notification("未到期 ⚠️", "目前尚未达到可续期的时间点，请稍后再试。", final_img)
 
         except Exception as e:
             error_img = str(OUTPUT_DIR / "error.png")
             sb.save_screenshot(error_img)
-            send_tg_notification(f"❌ 续期失败: {str(e)}", error_img)
+            send_tg_notification("执行异常 ❌", f"错误详情: `{str(e)}`", error_img)
             raise e
 
 if __name__ == "__main__":
