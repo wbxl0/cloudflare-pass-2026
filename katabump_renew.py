@@ -60,7 +60,7 @@ def run_auto_renew():
     ui_mode = os.environ.get("BYPASS_MODE", "1. 基础单次模式")
     
     login_url = "https://dashboard.katabump.com/auth/login"
-    target_url = "https://dashboard.katabump.com/servers/edit?id=177688"
+    target_url = "https://dashboard.katabump.com/servers/edit?id=210589"
     OUTPUT_DIR = Path("/app/output")
     os.makedirs(OUTPUT_DIR, exist_ok=True)
 
